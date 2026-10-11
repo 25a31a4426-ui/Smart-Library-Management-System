@@ -1,0 +1,30 @@
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Secret files
+.env
+.env.*
+.streamlit/secrets.toml
+
+# Python temporary files
+__pycache__/
+*.pyc
+
+# Virtual environments
+.venv/
+venv/
+
+# Sensitive utilities
+reset_password.py
+
+# Logs
+*.log
+
+# Backups
+*.bak
+*.backup
