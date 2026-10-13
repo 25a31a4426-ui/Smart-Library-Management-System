@@ -85,12 +85,24 @@ def create_request_table():
         """)
 
 
+def create_admin_table():
+    with get_connection() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS admins (
+                username TEXT PRIMARY KEY,
+                salt BLOB NOT NULL,
+                password_hash BLOB NOT NULL
+            )
+        """)
+
+
 def initialize_database():
     create_table()
     create_student_table()
     create_issue_table()
     create_student_login_table()
     create_request_table()
+    create_admin_table()
 
 
 # ==========================================

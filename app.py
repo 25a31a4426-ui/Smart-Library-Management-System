@@ -4,15 +4,15 @@ import matplotlib.pyplot as plt
 import qrcode
 import cv2
 import numpy as np
-import sqlite3
 
 from io import BytesIO
 from datetime import date
 
-from auth import check_login
+from auth import check_login, initialize_admin
 
 from database import (
     initialize_database,
+    get_connection,
     add_book,
     view_books,
     search_book,
@@ -67,6 +67,25 @@ initialize_database()
 
 
 # ==========================================
+# INITIALIZE LIBRARIAN ACCOUNT
+# ==========================================
+
+try:
+    admin_username = st.secrets.get("ADMIN_USERNAME")
+    admin_password = st.secrets.get("ADMIN_PASSWORD")
+
+except FileNotFoundError:
+    admin_username = None
+    admin_password = None
+
+if admin_username and admin_password:
+    initialize_admin(
+        admin_username,
+        admin_password
+    )
+
+
+# ==========================================
 # SESSION STATE
 # ==========================================
 
@@ -82,7 +101,9 @@ if "student_id" not in st.session_state:
 # ==========================================
 
 def show_books(books):
+
     if books:
+
         df = pd.DataFrame(
             books,
             columns=[
@@ -97,6 +118,7 @@ def show_books(books):
             df,
             use_container_width=True
         )
+
     else:
         st.info("No books found.")
 
@@ -114,26 +136,32 @@ def show_recommendations():
             "python", "java", "c++", "programming",
             "coding", "javascript", "data structures"
         ],
+
         "Database": [
             "database", "sql", "dbms", "mysql",
             "mongodb"
         ],
+
         "Artificial Intelligence": [
             "artificial intelligence", "machine learning",
             "deep learning", "neural", "ai"
         ],
+
         "Data Science": [
             "data science", "pandas", "numpy",
             "statistics", "data analysis"
         ],
+
         "Networking": [
             "network", "networking", "cybersecurity",
             "internet", "security"
         ],
+
         "Web Development": [
             "html", "css", "javascript", "react",
             "web development"
         ],
+
         "Mathematics": [
             "mathematics", "maths", "algebra",
             "calculus", "probability"
@@ -150,9 +178,10 @@ def show_recommendations():
         books = view_books()
         keywords = categories[interest]
 
-        conn = sqlite3.connect("library.db")
+        conn = get_connection()
 
         try:
+
             rows = conn.execute("""
                 SELECT book_id, COUNT(*)
                 FROM issued_books
@@ -164,6 +193,7 @@ def show_recommendations():
             borrowed_ids = set()
 
             if st.session_state.role == "Student":
+
                 student_id = st.session_state.student_id
 
                 history = conn.execute("""
@@ -172,7 +202,9 @@ def show_recommendations():
                     WHERE student_id=?
                 """, (student_id,)).fetchall()
 
-                borrowed_ids = {row[0] for row in history}
+                borrowed_ids = {
+                    row[0] for row in history
+                }
 
         finally:
             conn.close()
@@ -188,16 +220,16 @@ def show_recommendations():
 
             title_lower = title.lower()
 
-            # Only recommend books matching the selected topic.
-            if not any(word in title_lower for word in keywords):
+            if not any(
+                word in title_lower
+                for word in keywords
+            ):
                 continue
 
             score = 10
 
-            # Frequently borrowed books receive a higher ranking.
             score += popularity.get(book_id, 0) * 2
 
-            # Prefer books the student has not borrowed before.
             if book_id in borrowed_ids:
                 score -= 5
 
@@ -215,10 +247,12 @@ def show_recommendations():
             st.success("Recommended Books")
 
             show_books([
-                item[1] for item in recommendations
+                item[1]
+                for item in recommendations
             ])
 
         else:
+
             st.warning(
                 "No matching available books found."
             )
@@ -257,7 +291,11 @@ def show_qr_generator():
         )
 
         buffer = BytesIO()
-        qr.save(buffer, format="PNG")
+
+        qr.save(
+            buffer,
+            format="PNG"
+        )
 
         st.session_state.qr_image = buffer.getvalue()
         st.session_state.qr_book_id = book[0]
@@ -294,10 +332,13 @@ def show_qr_scanner():
     )
 
     if method == "Camera":
+
         image_file = st.camera_input(
             "Capture QR Code"
         )
+
     else:
+
         image_file = st.file_uploader(
             "Upload QR Code",
             type=["png", "jpg", "jpeg"]
@@ -325,17 +366,28 @@ def show_qr_scanner():
     data, _, _ = detector.detectAndDecode(image)
 
     if not data.startswith("BOOK_ID:"):
-        st.error("No valid book QR code detected.")
+
+        st.error(
+            "No valid book QR code detected."
+        )
         return
 
     try:
-        book_id = int(data.split(":", 1)[1])
+
+        book_id = int(
+            data.split(":", 1)[1]
+        )
+
     except ValueError:
+
         st.error("Invalid QR code.")
         return
 
     book = next(
-        (b for b in view_books() if b[0] == book_id),
+        (
+            b for b in view_books()
+            if b[0] == book_id
+        ),
         None
     )
 
@@ -349,6 +401,7 @@ def show_qr_scanner():
         st.write("**Available Copies:**", book[3])
 
     else:
+
         st.warning("Book not found.")
 
 
@@ -358,7 +411,9 @@ def show_qr_scanner():
 
 if st.session_state.role is None:
 
-    st.title("📚 Smart Library Management System")
+    st.title(
+        "📚 Smart Library Management System"
+    )
 
     st.subheader("Login")
 
@@ -370,20 +425,27 @@ if st.session_state.role is None:
 
     with st.form("login_form"):
 
-        username = st.text_input("Username")
+        username = st.text_input(
+            "Username"
+        )
 
         password = st.text_input(
             "Password",
             type="password"
         )
 
-        login = st.form_submit_button("Login")
+        login = st.form_submit_button(
+            "Login"
+        )
 
         if login:
 
             if login_type == "Librarian":
 
-                if check_login(username, password):
+                if check_login(
+                    username.strip(),
+                    password
+                ):
 
                     st.session_state.role = "Librarian"
                     st.session_state.student_id = None
@@ -391,7 +453,10 @@ if st.session_state.role is None:
                     st.rerun()
 
                 else:
-                    st.error("Invalid librarian login.")
+
+                    st.error(
+                        "Invalid librarian login."
+                    )
 
             else:
 
@@ -408,7 +473,10 @@ if st.session_state.role is None:
                     st.rerun()
 
                 else:
-                    st.error("Invalid student username or password.")
+
+                    st.error(
+                        "Invalid student username or password."
+                    )
 
     st.stop()
 
@@ -472,8 +540,15 @@ if st.sidebar.button("🚪 Logout"):
     st.session_state.role = None
     st.session_state.student_id = None
 
-    st.session_state.pop("qr_image", None)
-    st.session_state.pop("qr_book_id", None)
+    st.session_state.pop(
+        "qr_image",
+        None
+    )
+
+    st.session_state.pop(
+        "qr_book_id",
+        None
+    )
 
     st.rerun()
 
@@ -493,7 +568,9 @@ if menu == "Home":
         issued = view_issued_books()
         requests = view_book_requests()
 
-        available = sum(b[3] for b in books)
+        available = sum(
+            b[3] for b in books
+        )
 
         active = [
             i for i in issued
@@ -507,37 +584,72 @@ if menu == "Home":
 
         col1, col2, col3, col4 = st.columns(4)
 
-        col1.metric("📚 Available Books", available)
-        col2.metric("📤 Issued Books", len(active))
-        col3.metric("👨‍🎓 Students", len(students))
-        col4.metric("📩 Pending Requests", len(pending))
+        col1.metric(
+            "📚 Available Books",
+            available
+        )
+
+        col2.metric(
+            "📤 Issued Books",
+            len(active)
+        )
+
+        col3.metric(
+            "👨‍🎓 Students",
+            len(students)
+        )
+
+        col4.metric(
+            "📩 Pending Requests",
+            len(pending)
+        )
 
         st.divider()
 
-        st.subheader("📊 Library Statistics")
+        st.subheader(
+            "📊 Library Statistics"
+        )
 
-        fig, ax = plt.subplots(figsize=(7, 4))
+        fig, ax = plt.subplots(
+            figsize=(7, 4)
+        )
 
         ax.bar(
-            ["Available", "Issued", "Requests"],
-            [available, len(active), len(pending)],
+            [
+                "Available",
+                "Issued",
+                "Requests"
+            ],
+            [
+                available,
+                len(active),
+                len(pending)
+            ],
             color="#7B4DDB"
         )
 
         ax.set_ylabel("Count")
 
         st.pyplot(fig)
+
         plt.close(fig)
 
-        st.subheader("Recent Transactions")
+        st.subheader(
+            "Recent Transactions"
+        )
 
         if issued:
+
             df = pd.DataFrame(
                 issued,
                 columns=[
-                    "Issue ID", "Book", "Student",
-                    "Issue Date", "Due Date",
-                    "Return Date", "Fine"
+                    "Issue ID",
+                    "Book",
+                    "Student",
+                    "Issue Date",
+                    "Due Date",
+                    "Return Date",
+                    "Fine"
                 ]
             )
 
@@ -545,21 +657,34 @@ if menu == "Home":
                 df.head(5),
                 use_container_width=True
             )
+
         else:
-            st.info("No transactions yet.")
+
+            st.info(
+                "No transactions yet."
+            )
 
     else:
 
-        st.title("👨‍🎓 Student Dashboard")
+        st.title(
+            "👨‍🎓 Student Dashboard"
+        )
 
         student_id = st.session_state.student_id
 
-        profile = get_student_profile(student_id)
+        profile = get_student_profile(
+            student_id
+        )
 
         if profile:
-            st.write(f"Welcome, **{profile[1]}**!")
 
-        records = view_student_books(student_id)
+            st.write(
+                f"Welcome, **{profile[1]}**!"
+            )
+
+        records = view_student_books(
+            student_id
+        )
 
         active = [
             r for r in records
@@ -575,7 +700,9 @@ if menu == "Home":
 
         col1.metric(
             "📚 Available Books",
-            sum(b[3] for b in view_books())
+            sum(
+                b[3] for b in view_books()
+            )
         )
 
         col2.metric(
@@ -595,7 +722,7 @@ if menu == "Home":
 
 
 # ==========================================
-# MY PROFILE - NEW
+# MY PROFILE
 # ==========================================
 
 elif menu == "My Profile" and role == "Student":
@@ -604,23 +731,50 @@ elif menu == "My Profile" and role == "Student":
 
     student_id = st.session_state.student_id
 
-    profile = get_student_profile(student_id)
+    profile = get_student_profile(
+        student_id
+    )
 
     if profile:
 
-        st.write("**Student ID:**", profile[0])
-        st.write("**Name:**", profile[1])
-        st.write("**Department:**", profile[2])
-        st.write("**Year:**", profile[3])
-        st.write("**Username:**", profile[4])
+        st.write(
+            "**Student ID:**",
+            profile[0]
+        )
 
-        st.write("**Password:** ********")
+        st.write(
+            "**Name:**",
+            profile[1]
+        )
+
+        st.write(
+            "**Department:**",
+            profile[2]
+        )
+
+        st.write(
+            "**Year:**",
+            profile[3]
+        )
+
+        st.write(
+            "**Username:**",
+            profile[4]
+        )
+
+        st.write(
+            "**Password:** ********"
+        )
 
         st.divider()
 
-        st.subheader("🔐 Change Password")
+        st.subheader(
+            "🔐 Change Password"
+        )
 
-        with st.form("change_password_form"):
+        with st.form(
+            "change_password_form"
+        ):
 
             old_password = st.text_input(
                 "Current Password",
@@ -644,17 +798,26 @@ elif menu == "My Profile" and role == "Student":
             if submit:
 
                 if not old_password or not new_password:
-                    st.warning("Please fill all fields.")
+
+                    st.warning(
+                        "Please fill all fields."
+                    )
 
                 elif len(new_password) < 8:
+
                     st.warning(
-                        "New password must contain at least 8 characters."
+                        "New password must contain "
+                        "at least 8 characters."
                     )
 
                 elif new_password != confirm_password:
-                    st.error("New passwords do not match.")
+
+                    st.error(
+                        "New passwords do not match."
+                    )
 
                 elif new_password == old_password:
+
                     st.warning(
                         "Choose a different new password."
                     )
@@ -668,10 +831,13 @@ elif menu == "My Profile" and role == "Student":
                     )
 
                     if success:
+
                         st.success(
                             "Password updated successfully!"
                         )
+
                     else:
+
                         st.error(
                             "Current password is incorrect."
                         )
@@ -685,10 +851,17 @@ elif menu == "Register Student" and role == "Librarian":
 
     st.title("👨‍🎓 Register Student")
 
-    with st.form("register_student_form"):
+    with st.form(
+        "register_student_form"
+    ):
 
-        name = st.text_input("Student Name")
-        department = st.text_input("Department")
+        name = st.text_input(
+            "Student Name"
+        )
+
+        department = st.text_input(
+            "Department"
+        )
 
         year = st.number_input(
             "Year",
@@ -697,7 +870,9 @@ elif menu == "Register Student" and role == "Librarian":
             step=1
         )
 
-        username = st.text_input("Username")
+        username = st.text_input(
+            "Username"
+        )
 
         password = st.text_input(
             "Password",
@@ -717,7 +892,9 @@ elif menu == "Register Student" and role == "Librarian":
                 password
             ]):
 
-                st.warning("Please fill all fields.")
+                st.warning(
+                    "Please fill all fields."
+                )
 
             elif len(password) < 8:
 
@@ -741,8 +918,15 @@ elif menu == "Register Student" and role == "Librarian":
                         "Student registered successfully!"
                     )
 
-                    st.write("Student ID:", student_id)
-                    st.write("Username:", username.strip())
+                    st.write(
+                        "Student ID:",
+                        student_id
+                    )
+
+                    st.write(
+                        "Username:",
+                        username.strip()
+                    )
 
                 else:
 
@@ -758,7 +942,9 @@ elif menu == "Register Student" and role == "Librarian":
 
 elif menu == "View Students" and role == "Librarian":
 
-    st.title("👨‍🎓 Registered Students")
+    st.title(
+        "👨‍🎓 Registered Students"
+    )
 
     students = view_students()
 
@@ -778,7 +964,10 @@ elif menu == "View Students" and role == "Librarian":
         )
 
     else:
-        st.info("No students registered.")
+
+        st.info(
+            "No students registered."
+        )
 
 
 # ==========================================
@@ -791,8 +980,13 @@ elif menu == "Add Book" and role == "Librarian":
 
     with st.form("add_book_form"):
 
-        title = st.text_input("Book Title")
-        author = st.text_input("Author")
+        title = st.text_input(
+            "Book Title"
+        )
+
+        author = st.text_input(
+            "Author"
+        )
 
         quantity = st.number_input(
             "Quantity",
@@ -800,7 +994,9 @@ elif menu == "Add Book" and role == "Librarian":
             step=1
         )
 
-        submit = st.form_submit_button("Add Book")
+        submit = st.form_submit_button(
+            "Add Book"
+        )
 
         if submit:
 
@@ -812,10 +1008,15 @@ elif menu == "Add Book" and role == "Librarian":
                     int(quantity)
                 )
 
-                st.success("Book added successfully!")
+                st.success(
+                    "Book added successfully!"
+                )
 
             else:
-                st.warning("Please fill all fields.")
+
+                st.warning(
+                    "Please fill all fields."
+                )
 
 
 # ==========================================
@@ -826,7 +1027,9 @@ elif menu == "View Books":
 
     st.title("📚 View Books")
 
-    show_books(view_books())
+    show_books(
+        view_books()
+    )
 
 
 # ==========================================
@@ -837,18 +1040,29 @@ elif menu == "Search Book":
 
     st.title("🔍 Search Book")
 
-    keyword = st.text_input("Enter Book Title")
+    keyword = st.text_input(
+        "Enter Book Title"
+    )
 
     if st.button("Search"):
 
         if keyword.strip():
-            show_books(search_book(keyword.strip()))
+
+            show_books(
+                search_book(
+                    keyword.strip()
+                )
+            )
+
         else:
-            st.warning("Enter a book title.")
+
+            st.warning(
+                "Enter a book title."
+            )
 
 
 # ==========================================
-# QR CODE
+# GENERATE QR CODE
 # ==========================================
 
 elif menu == "Generate QR Code" and role == "Librarian":
@@ -856,13 +1070,17 @@ elif menu == "Generate QR Code" and role == "Librarian":
     show_qr_generator()
 
 
+# ==========================================
+# SCAN QR CODE
+# ==========================================
+
 elif menu == "Scan QR Code":
 
     show_qr_scanner()
 
 
 # ==========================================
-# RECOMMENDATIONS
+# SMART RECOMMENDATIONS
 # ==========================================
 
 elif menu == "Smart Recommendations":
@@ -871,7 +1089,7 @@ elif menu == "Smart Recommendations":
 
 
 # ==========================================
-# REQUEST A BOOK - NEW
+# REQUEST A BOOK
 # ==========================================
 
 elif menu == "Request a Book" and role == "Student":
@@ -885,7 +1103,9 @@ elif menu == "Request a Book" and role == "Student":
 
     if not books:
 
-        st.warning("No books available.")
+        st.warning(
+            "No books available."
+        )
 
     else:
 
@@ -901,9 +1121,20 @@ elif menu == "Request a Book" and role == "Student":
 
         book = options[selected]
 
-        st.write("**Title:**", book[1])
-        st.write("**Author:**", book[2])
-        st.write("**Available Copies:**", book[3])
+        st.write(
+            "**Title:**",
+            book[1]
+        )
+
+        st.write(
+            "**Author:**",
+            book[2]
+        )
+
+        st.write(
+            "**Available Copies:**",
+            book[3]
+        )
 
         if st.button("Request Book"):
 
@@ -913,13 +1144,16 @@ elif menu == "Request a Book" and role == "Student":
             )
 
             if result == "Book request submitted successfully!":
+
                 st.success(result)
+
             else:
+
                 st.warning(result)
 
 
 # ==========================================
-# MY BOOK REQUESTS - NEW
+# MY BOOK REQUESTS
 # ==========================================
 
 elif menu == "My Book Requests" and role == "Student":
@@ -945,16 +1179,21 @@ elif menu == "My Book Requests" and role == "Student":
         )
 
     else:
-        st.info("You have not requested any books.")
+
+        st.info(
+            "You have not requested any books."
+        )
 
 
 # ==========================================
-# MANAGE BOOK REQUESTS - NEW
+# MANAGE BOOK REQUESTS
 # ==========================================
 
 elif menu == "Manage Book Requests" and role == "Librarian":
 
-    st.title("📩 Manage Book Requests")
+    st.title(
+        "📩 Manage Book Requests"
+    )
 
     requests = view_book_requests()
 
@@ -999,37 +1238,57 @@ elif menu == "Manage Book Requests" and role == "Librarian":
 
             with col1:
 
-                if st.button("✅ Approve Request"):
+                if st.button(
+                    "✅ Approve Request"
+                ):
 
                     result = process_book_request(
                         request_id,
                         "Approved"
                     )
 
-                    if result.startswith("Request approved"):
+                    if result.startswith(
+                        "Request approved"
+                    ):
+
                         st.success(result)
+
                     else:
+
                         st.warning(result)
 
             with col2:
 
-                if st.button("❌ Reject Request"):
+                if st.button(
+                    "❌ Reject Request"
+                ):
 
                     result = process_book_request(
                         request_id,
                         "Rejected"
                     )
 
-                    if result.startswith("Request rejected"):
+                    if result.startswith(
+                        "Request rejected"
+                    ):
+
                         st.success(result)
+
                     else:
+
                         st.warning(result)
 
         else:
-            st.info("No pending requests.")
+
+            st.info(
+                "No pending requests."
+            )
 
     else:
-        st.info("No book requests yet.")
+
+        st.info(
+            "No book requests yet."
+        )
 
 
 # ==========================================
@@ -1056,10 +1315,14 @@ elif menu == "My Borrowed Books" and role == "Student":
 
                 late_days = max(
                     0,
-                    (date.today() - date.fromisoformat(due_date)).days
+                    (
+                        date.today()
+                        - date.fromisoformat(due_date)
+                    ).days
                 )
 
                 current_fine = late_days * 5
+
                 status = "Borrowed"
 
             else:
@@ -1082,11 +1345,14 @@ elif menu == "My Borrowed Books" and role == "Student":
         )
 
     else:
-        st.info("No borrowed books found.")
+
+        st.info(
+            "No borrowed books found."
+        )
 
 
 # ==========================================
-# DUE DATE REMINDERS - NEW
+# DUE DATE REMINDERS
 # ==========================================
 
 elif menu == "Due Date Reminders" and role == "Student":
@@ -1104,7 +1370,9 @@ elif menu == "Due Date Reminders" and role == "Student":
 
     if not active_books:
 
-        st.info("You have no books to return.")
+        st.info(
+            "You have no books to return."
+        )
 
     else:
 
@@ -1112,14 +1380,27 @@ elif menu == "Due Date Reminders" and role == "Student":
 
             title, issue_date, due_date, _, _ = record
 
-            due = date.fromisoformat(due_date)
+            due = date.fromisoformat(
+                due_date
+            )
 
-            days_left = (due - date.today()).days
+            days_left = (
+                due - date.today()
+            ).days
 
-            st.subheader(f"📖 {title}")
+            st.subheader(
+                f"📖 {title}"
+            )
 
-            st.write("**Issue Date:**", issue_date)
-            st.write("**Due Date:**", due_date)
+            st.write(
+                "**Issue Date:**",
+                issue_date
+            )
+
+            st.write(
+                "**Due Date:**",
+                due_date
+            )
 
             if days_left < 0:
 
@@ -1132,7 +1413,9 @@ elif menu == "Due Date Reminders" and role == "Student":
 
             elif days_left == 0:
 
-                st.warning("⚠️ Return this book today!")
+                st.warning(
+                    "⚠️ Return this book today!"
+                )
 
             elif days_left <= 3:
 
@@ -1170,10 +1453,16 @@ elif menu == "Issue Book" and role == "Librarian":
     students = view_students()
 
     if not books:
-        st.warning("No available books.")
+
+        st.warning(
+            "No available books."
+        )
 
     elif not students:
-        st.warning("No registered students.")
+
+        st.warning(
+            "No registered students."
+        )
 
     else:
 
@@ -1205,8 +1494,11 @@ elif menu == "Issue Book" and role == "Librarian":
             )
 
             if result == "Book issued successfully!":
+
                 st.success(result)
+
             else:
+
                 st.warning(result)
 
 
@@ -1241,13 +1533,21 @@ elif menu == "Return Book" and role == "Librarian":
                 options[selected]
             )
 
-            if result.startswith("Book returned successfully"):
+            if result.startswith(
+                "Book returned successfully"
+            ):
+
                 st.success(result)
+
             else:
+
                 st.warning(result)
 
     else:
-        st.info("No active issued books.")
+
+        st.info(
+            "No active issued books."
+        )
 
 
 # ==========================================
@@ -1279,7 +1579,10 @@ elif menu == "Issued Books" and role == "Librarian":
         )
 
     else:
-        st.info("No issued books found.")
+
+        st.info(
+            "No issued books found."
+        )
 
 
 # ==========================================
@@ -1306,7 +1609,9 @@ elif menu == "Update Book" and role == "Librarian":
 
         book = options[selected]
 
-        with st.form("update_book_form"):
+        with st.form(
+            "update_book_form"
+        ):
 
             title = st.text_input(
                 "Title",
@@ -1340,13 +1645,21 @@ elif menu == "Update Book" and role == "Librarian":
                         int(quantity)
                     )
 
-                    st.success("Book updated successfully!")
+                    st.success(
+                        "Book updated successfully!"
+                    )
 
                 else:
-                    st.warning("Please fill all fields.")
+
+                    st.warning(
+                        "Please fill all fields."
+                    )
 
     else:
-        st.info("No books available.")
+
+        st.info(
+            "No books available."
+        )
 
 
 # ==========================================
@@ -1379,7 +1692,9 @@ elif menu == "Delete Book" and role == "Librarian":
 
             if not confirm:
 
-                st.warning("Please confirm deletion.")
+                st.warning(
+                    "Please confirm deletion."
+                )
 
             else:
 
@@ -1388,12 +1703,20 @@ elif menu == "Delete Book" and role == "Librarian":
                 )
 
                 if result:
-                    st.success("Book deleted successfully!")
+
+                    st.success(
+                        "Book deleted successfully!"
+                    )
+
                 else:
+
                     st.error(
                         "Cannot delete this book because it has "
                         "borrowing or request history."
                     )
 
     else:
-        st.info("No books available.")
+
+        st.info(
+            "No books available."
+        )

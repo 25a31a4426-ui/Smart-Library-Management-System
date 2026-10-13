@@ -7,6 +7,10 @@ import getpass
 DB_NAME = "library.db"
 
 
+# ==========================================
+# HASH PASSWORD
+# ==========================================
+
 def hash_password(password, salt):
     return hashlib.pbkdf2_hmac(
         "sha256",
@@ -16,72 +20,136 @@ def hash_password(password, salt):
     )
 
 
+# ==========================================
+# CREATE ADMIN TABLE
+# ==========================================
+
+def create_admin_table():
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS admins (
+                username TEXT PRIMARY KEY,
+                salt BLOB NOT NULL,
+                password_hash BLOB NOT NULL
+            )
+        """)
+
+
+# ==========================================
+# CREATE ADMIN USING TERMINAL
+# ==========================================
+
 def create_admin():
-    conn = sqlite3.connect(DB_NAME)
+    create_admin_table()
 
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS admins (
-            username TEXT PRIMARY KEY,
-            salt BLOB NOT NULL,
-            password_hash BLOB NOT NULL
-        )
-    """)
+    with sqlite3.connect(DB_NAME) as conn:
 
-    conn.commit()
+        count = conn.execute(
+            "SELECT COUNT(*) FROM admins"
+        ).fetchone()[0]
 
-    count = conn.execute(
-        "SELECT COUNT(*) FROM admins"
-    ).fetchone()[0]
+        if count > 0:
+            print("Admin account already exists.")
+            return
 
-    if count == 0:
         print("Create your admin account")
 
         username = input("Enter admin username: ").strip()
         password = getpass.getpass("Enter password: ")
 
         if not username or len(password) < 12:
-            print("Username required and password must have at least 12 characters.")
-            conn.close()
+            print(
+                "Username is required and password "
+                "must have at least 12 characters."
+            )
             return
 
         salt = secrets.token_bytes(16)
         password_hash = hash_password(password, salt)
 
         conn.execute(
-            "INSERT INTO admins VALUES (?, ?, ?)",
+            """
+            INSERT INTO admins (username, salt, password_hash)
+            VALUES (?, ?, ?)
+            """,
             (username, salt, password_hash)
         )
 
-        conn.commit()
         print("Admin created successfully!")
 
-    else:
-        print("Admin account already exists.")
 
-    conn.close()
+# ==========================================
+# INITIALIZE ADMIN FOR STREAMLIT CLOUD
+# ==========================================
 
+def initialize_admin(username, password):
 
-def check_login(username, password):
-    conn = sqlite3.connect(DB_NAME)
+    username = username.strip()
 
-    result = conn.execute(
-        "SELECT salt, password_hash FROM admins WHERE username=?",
-        (username,)
-    ).fetchone()
-
-    conn.close()
-
-    if result:
-        salt, stored_hash = result
-        entered_hash = hash_password(password, salt)
-
-        return hmac.compare_digest(
-            entered_hash,
-            stored_hash
+    if not username or len(password) < 12:
+        raise ValueError(
+            "Admin username is required and "
+            "password must contain at least 12 characters."
         )
 
-    return False
+    create_admin_table()
 
+    with sqlite3.connect(DB_NAME) as conn:
+
+        existing = conn.execute(
+            "SELECT username FROM admins WHERE username=?",
+            (username,)
+        ).fetchone()
+
+        if existing is None:
+
+            salt = secrets.token_bytes(16)
+            password_hash = hash_password(password, salt)
+
+            conn.execute(
+                """
+                INSERT INTO admins (username, salt, password_hash)
+                VALUES (?, ?, ?)
+                """,
+                (username, salt, password_hash)
+            )
+
+
+# ==========================================
+# CHECK LIBRARIAN LOGIN
+# ==========================================
+
+def check_login(username, password):
+
+    create_admin_table()
+
+    with sqlite3.connect(DB_NAME) as conn:
+
+        result = conn.execute(
+            """
+            SELECT salt, password_hash
+            FROM admins
+            WHERE username=?
+            """,
+            (username.strip(),)
+        ).fetchone()
+
+    if result is None:
+        return False
+
+    salt, stored_hash = result
+
+    entered_hash = hash_password(password, salt)
+
+    return hmac.compare_digest(
+        entered_hash,
+        stored_hash
+    )
+
+
+# ==========================================
+# RUN DIRECTLY
+# ==========================================
 
 if __name__ == "__main__":
     create_admin()
